@@ -1,22 +1,25 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266WiFiMulti.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClient.h>
 #include "DHT.h"
 
-// Uncomment one of the lines below for whatever DHT sensor type you're using!
 #define DHTTYPE DHT11  // DHT 11
-//#define DHTTYPE DHT21   // DHT 21 (AM2301)
-// #define DHTTYPE DHT22  // DHT 22  (AM2302), AM2321
 
-/*Put your SSID & Password*/
-const char *ssid = "VIT8G";           // Enter SSID here
-const char *password = "iamyajat69";  //Enter Password here
+const char *ssid = "***";
+const char *password = "***";
+const char *apiKeyIn = "***";
+
+WiFiClient wifiClient;
+
+String host = "http://api.asksensors.com";
 
 ESP8266WebServer server(80);
 
 // DHT Sensor
 uint8_t DHTPin = D1;
 uint8_t DHTPin2 = D2;
-
 
 // Initialize DHT sensor.
 DHT dht(DHTPin, DHTTYPE);
@@ -34,10 +37,8 @@ void setup() {
 
   Serial.begin(115200);
 
-
   dht.begin();
   dht2.begin();
-
 
   Serial.println("Connecting to ");
   Serial.println(ssid);
@@ -64,15 +65,49 @@ void setup() {
 
 void loop() {
   server.handleClient();
-}
-
-void handle_OnConnect() {
-  Temperature = dht.readTemperature();  // Gets the values of the temperature
-  Humidity = dht.readHumidity();        // Gets the values of the humidity
-
+  Temperature = dht.readTemperature();    // Gets the values of the temperature
+  Humidity = dht.readHumidity();          // Gets the values of the humidity
   Temperature2 = dht2.readTemperature();  // Gets the values of the temperature
   Humidity2 = dht2.readHumidity();        // Gets the values of the humidity
 
+  if (WiFi.status() == WL_CONNECTED) {
+
+    HTTPClient http;
+
+    Serial.print("[HTTP] begin...\n");
+
+    // Create a URL for the request
+    String url = "";
+    url += host;
+    url += "/write/";
+    url += apiKeyIn;
+    url += "?module1=";
+    url += Temperature;
+    url += "&module2=";
+    url += Temperature2;
+
+    Serial.print("********** requesting URL: ");
+    Serial.println(url);
+    http.begin(wifiClient, url);  //HTTP
+
+    Serial.println("> Request sent to ASKSENSORS");
+
+    Serial.println("[HTTP] GET...");
+    int httpCode = http.GET();
+    if (httpCode > 0) {
+      Serial.printf("[HTTP] GET... code: %d\n", httpCode);
+      if (httpCode == HTTP_CODE_OK) {
+        String payload = http.getString();
+        Serial.println(payload);
+      }
+    } else {
+      Serial.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
+    }
+    http.end();
+  }
+}
+
+void handle_OnConnect() {
   server.send(200, "text/html", SendHTML(Temperature, Humidity, Temperature2, Humidity2));
 }
 
